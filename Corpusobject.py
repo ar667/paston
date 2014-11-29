@@ -165,6 +165,9 @@ class Corpus:
             return temp
 
         def generate_jwd_data(words, moddict):
+            '''
+            I should try rewriting this with generators and yield
+            '''
             store = defaultdict(list)
             for i, w in enumerate(words):
                 print('Doing', w, ':', i+1,'/', len(words))
