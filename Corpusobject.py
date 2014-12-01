@@ -1,5 +1,5 @@
 class Corpus:
-    def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=False, is_paston=True):
+    def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True, is_paston=True):
         #example junk: junk={'FW', '.', ',', "'", '"'}
         from nltk.tag import str2tuple
         from collections import Counter, namedtuple, defaultdict
@@ -127,6 +127,8 @@ class Corpus:
                 bigramdict = {}
                 for item in list:
                     bigramdict[item] = bigramdict.get(item, 0) + 1
+                #This next bit norms the dict counts
+                a
                 return bigramdict
             return padd_list_to_dict(bigrams_with_padding(word))
 
@@ -174,15 +176,17 @@ class Corpus:
                 store[w].append(sorted([[m, jwd(w,m)] for m in moddict], key=itemgetter(1),reverse=True)[0:5])
             return store
 
-        if os.path.isfile('pickled/jwd_data_' + self.filename_nopath + ".pickle") == True:
-            self.jwd_data = pickle.load(open('pickled/jwd_data_' + self.filename_nopath + ".pickle",'rb'))
-            print('Found JWD_data: loading it')
+        if include_JWD == True:
+            if os.path.isfile('pickled/jwd_data_' + self.filename_nopath + ".pickle") == True:
+                self.jwd_data = pickle.load(open('pickled/jwd_data_' + self.filename_nopath + ".pickle",'rb'))
+                print('Found JWD_data: loading it')
+            else:
+                print('No JWD_data found: generating (this will take one million years)')
+                self.jwd_data = generate_jwd_data(self.word_list, self.modern_dictionary)
+                print('Pickling it.')
+                pickle.dump(self.jwd_data, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
         else:
-            print('No JWD_data found: generating (this will take one million years)')
-            self.jwd_data = generate_jwd_data(self.word_list, self.modern_dictionary)
-            print('Pickling it.')
-            pickle.dump(self.jwd_data, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
-
+            print('Skipping JWD step')
 
 
         '''
@@ -203,8 +207,9 @@ class Corpus:
             for i in range(len(self.tag_prefixes)):
                 temp = populate(word, self.prob_list[i], self.tag_prefixes[i])
                 store.append(temp)
-                bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word).items()}
-                store.append(bg)
+                if include_bigrams == True:
+                    bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word).items()}
+                    store.append(bg)
             if include_JWD == True:
                 for jwditem in self.jwd_data[word]:
                     for pair in jwditem:
@@ -264,7 +269,15 @@ class Corpus:
 
 '''
 from Corpusobject import Corpus
-paston = Corpus('corpora/paston', windowsize=1, bigramweight=1, posweight=1, include_JWD=True, is_paston=True)
+
+paston2 = Corpus('corpora/paston', windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
+
+paston = Corpus('corpora/paston', windowsize=1, bigramweight=1, posweight=1, include_JWD=False, is_paston=True)
+
+paston = Corpus('corpora/paston', windowsize=1, bigramweight=1, posweight=1, include_JWD=False, include_bigrams=False, is_paston=True)
+
+paston = Corpus('corpora/paston', windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=False, is_paston=True)
+
 '''
 
 
