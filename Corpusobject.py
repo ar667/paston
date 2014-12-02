@@ -1,17 +1,19 @@
+from nltk.tag import str2tuple
+from collections import Counter, namedtuple, defaultdict
+from sklearn.feature_extraction import DictVectorizer
+from copy import deepcopy
+from jellyfish import jaro_winkler as jwd
+import pickle
+from operator import itemgetter
+import os
+from itertools import product
+from multiprocessing import Pool
+import csv
+from sklearn.cluster import KMeans as KM
+
 class Corpus:
     def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True, is_paston=True):
         #example junk: junk={'FW', '.', ',', "'", '"'}
-        from nltk.tag import str2tuple
-        from collections import Counter, namedtuple, defaultdict
-        from sklearn.feature_extraction import DictVectorizer
-        from copy import deepcopy
-        from jellyfish import jaro_winkler as jwd
-        import pickle
-        from operator import itemgetter
-        import os
-        from itertools import product
-        from multiprocessing import Pool
-
         self.windowsize = windowsize
         self.bigramweight = bigramweight
         self.posweight = posweight
@@ -53,7 +55,7 @@ class Corpus:
             self.data = [(x.lower(),y) for (x,y) in data3]
             print('Processing', filename)
         else:
-            pass #implement this for BNC stuff?
+            print("Not implemented")
 
         def count_all_words(data):
             '''
@@ -128,7 +130,8 @@ class Corpus:
                 for item in list:
                     bigramdict[item] = bigramdict.get(item, 0) + 1
                 #This next bit norms the dict counts
-                a
+                for k,v in bigramdict.items():
+                    bigramdict[k] = round(bigramdict[k]/len(bigramdict),8)
                 return bigramdict
             return padd_list_to_dict(bigrams_with_padding(word))
 
@@ -225,14 +228,14 @@ class Corpus:
         Use DictVectorizer to normalise the feature vectors for use in sklearn
         '''
         self.vectoriserObject = DictVectorizer(sparse=False)
-        self.vectors = self.vectoriserObject.fit_transform(self.raw_features)
+        #self.vectors = self.vectoriserObject.fit_transform(self.raw_features)
+        #Took this out because it creates massive vectors based on the entire data set
+        #when really all I want is a subset (i.e. beginning with r) and I don't want
+        #to have lots of DictVectoriser features caused by non-present words
+        #Rewrite find_by_start() to make sure it does this work now
         print('Converting feature sets to vectors')
 
         print('All done')
-
-
-
-
 
 
     def find(self, word):
@@ -243,7 +246,7 @@ class Corpus:
             if n == word:
                 return self.raw_features[i]
 
-    def find_by_start(self, n, vectors=False):
+    def find_by_start(self, n, vectors=True):
         '''
         Returns labels and features for words beginning with n
         n can be one char or more.
@@ -260,9 +263,21 @@ class Corpus:
         else:
             return l, f
 
+    def dump(self, labs, vects, filename):
+        fname = 'csv/' + filename + ".csv"
+        with open(fname, 'w') as file:
+            out = csv.writer(file, delimiter=",", quoting=csv.QUOTE_ALL)
+            temp = zip(labs,vects)
+            temp = sorted(temp, key=itemgetter(1))
+            for i in temp:
+                out.writerow(i)
+        print('Wrote to', fname)
 
-
-
+    def do_KM(self, letter, k, iter=200, dump=False, parr=-2):
+        l,v = self.find_by_start(letter)
+        km_obj = KM(n_clusters=k, max_iter=iter, n_jobs=parr)
+        results = km_obj.fit(v)
+        return l, results.labels_
 
 
 
@@ -270,13 +285,17 @@ class Corpus:
 '''
 from Corpusobject import Corpus
 
-paston2 = Corpus('corpora/paston', windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
+paston1 = Corpus('corpora/paston', windowsize=3, bigramweight=1,
+    posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
 
-paston = Corpus('corpora/paston', windowsize=1, bigramweight=1, posweight=1, include_JWD=False, is_paston=True)
+paston2 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
+    posweight=1, include_JWD=False, include_bigrams=False, is_paston=True)
 
-paston = Corpus('corpora/paston', windowsize=1, bigramweight=1, posweight=1, include_JWD=False, include_bigrams=False, is_paston=True)
+paston3 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
+    posweight=1, include_JWD=False, include_bigrams=True, is_paston=True)
 
-paston = Corpus('corpora/paston', windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=False, is_paston=True)
+paston4 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
+    posweight=1, include_JWD=True, include_bigrams=False, is_paston=True)
 
 '''
 
