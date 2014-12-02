@@ -18,7 +18,7 @@ results = run_tests(settings, k_ranges)
 
 do_graph(results,settings)
 
-
+-----
 settings2 = [i for i in product([0,1,2,3,4], [False],[True,False])]
 
 k_ranges2 = [100,150,200,250,300,350,400,450,500,550,600]
@@ -26,6 +26,32 @@ k_ranges2 = [100,150,200,250,300,350,400,450,500,550,600]
 results2 = run_tests(settings2, k_ranges2)
 
 do_graph(results2,settings2)
+-------
+settings3 = [i for i in product([0,1,2,3,4], [True,False], [False])]
+
+k_ranges3 = [100,150,200,250,300,350,400,450,500,550,600]
+
+results3 = run_tests(settings3, k_ranges3)
+
+do_graph(results3,settings3)
+------
+settings4 = [i for i in product([0,1,2,3,4], [True], [True])]
+
+k_ranges4 = [100,150,200,250,300,350,400,450,500,550,600]
+
+results4 = run_tests(settings4, k_ranges4)
+
+do_graph(results4,settings4)
+
+------
+settings5 = [i for i in product([0], [True, False], [True,False])]
+
+k_ranges5 = [100,150,200,250,300,350,400,450,500,550,600,650,700,750,800]
+
+results5 = run_tests(settings5, k_ranges5)
+
+do_graph(results5,settings5)
+
 
 '''
 
@@ -97,5 +123,24 @@ def do_graph(data, settings):
 #         figure(counter)
 #         pyplot(i[0],i[1])
 #         counter += 1
+
+'''
+
+s4 = []
+r4 = []
+for i, x in enumerate(settings4):
+    if x[1] == False:
+        s4.append(x)
+        r4.append(results4[i])
+do_graph(r4,s4)
+
+s4 = []
+r4 = []
+for i, x in enumerate(settings4):
+    if x[1] == True:
+        s4.append(x)
+        r4.append(results4[i])
+
+'''
 
 
