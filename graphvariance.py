@@ -10,9 +10,9 @@ settings = [list of tuples (A,B,C)], where:
 
 ranges = list of ints, for use as K setting in kmeans
 
-settings = [i for i in product([0,1,2,3,4], [False],[False])]
+settings = [i for i in product([0,1], [True, False],[True, False])]
 
-k_ranges = [100,150,200,250,300,350,400,450,500,550,600]
+k_ranges = [200,300,400,500,600,700,800,900,1000,1100,1200]
 
 results = run_tests(settings, k_ranges)
 
@@ -78,14 +78,14 @@ def data_for_graph(steps, vects):
     bss = tss - wcss
     return [k_means_var, k_range, bss/tss*100]
 
-def run_tests(corpora_settings, k_ranges):
+def run_tests(letter, corpora_settings, k_ranges):
     corps = []
     for setting in corpora_settings:
         corps.append(Corpus('corpora/paston', windowsize=setting[0], include_JWD=setting[1], include_bigrams=setting[2]))
     vects = []
     for i, corp in enumerate(corps):
         print('Getting vects', i, 'of', len(corps))
-        a,b = corp.find_by_start('r')
+        a,b = corp.find_by_start(letter)
         vects.append([a,b])
     results = []
     for i, e in enumerate(vects):

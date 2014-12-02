@@ -18,6 +18,8 @@ class Corpus:
         self.bigramweight = bigramweight
         self.posweight = posweight
         self.filename_nopath = filename.split('/')[1]
+        self.include_JWD = include_JWD
+        self.include_bigrams = include_bigrams
 
         with open('data/moderndictionary', 'r') as file:
             self.modern_dictionary = file.read()
@@ -279,17 +281,22 @@ class Corpus:
         results = km_obj.fit(v)
         return l, results.labels_
 
-
+    def print_config(self):
+        print("Window size       ", self.windowsize)
+        print("Bigram weight     ", self.bigramweight)
+        print("POS weight        ", self.posweight)
+        print("Include_JWD       ", self.include_JWD)
+        print("Include_Bigrams   ", self.include_bigrams)
 
 
 '''
 from Corpusobject import Corpus
 
-paston1 = Corpus('corpora/paston', windowsize=3, bigramweight=1,
+paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
 
 paston2 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=False, include_bigrams=False, is_paston=True)
+    posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
 
 paston3 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=False, include_bigrams=True, is_paston=True)
