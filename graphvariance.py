@@ -66,6 +66,9 @@ from itertools import cycle
 
 
 def data_for_graph(steps, vects):
+    '''
+    From sarguido/k-means-clustering
+    '''
     k_range = steps
     print('Doing all KM models')
     k_means_var =[KMeans(n_clusters=k, n_jobs=-1).fit(vects) for k in k_range]
