@@ -12,6 +12,11 @@ import csv
 from sklearn.cluster import KMeans as KM
 from datetime import datetime as DT
 
+'''
+paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
+    posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
+'''
+
 class Corpus:
     def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True, is_paston=True):
         #example junk: junk={'FW', '.', ',', "'", '"'}
@@ -69,16 +74,16 @@ class Corpus:
             '''
             word_list = {}
             for pair in data:
-                word_list[pair[0].lower()] = word_list.get(pair[0].lower(),0) + 1
+                word_list[pair] = word_list.get(pair,0) + 1
             junk = []
             for k in word_list.keys():
-                if k.startswith('startpad') or k.startswith('endpad'):
+                if k[0].startswith('startpad') or k[0].startswith('endpad'):
                     junk.append(k)
             return {k:v for k,v in word_list.items() if k not in junk}
 
         def sweep(data, spread):
             '''
-            Returns a list of dictionariies. One dictionary per position determined by windowsize
+            Returns a list of dictionariies. One dictionary per position determined by windowsize.
             For windowsize of n, sweep will return a list of size 2n+1
             For each dictionary in the list:
             k = a word in the word list
@@ -88,11 +93,11 @@ class Corpus:
             '''
             windows = []
             for window in spread:
-                store = {k[0]:defaultdict(int) for k in data}
-                store = {k:v for k,v in store.items() if k.startswith('startp') == False and k.startswith('endpad') == False}
+                store = {k:defaultdict(int) for k in data}
+                store = {k:v for k,v in store.items() if k[0].startswith('startp') == False and k[0].startswith('endpad') == False}
                 for index, pair in enumerate(data):
                     if pair[0][0:6] not in ['startp','endpad']:
-                        store[pair[0]][data[index+window][1]] += 1
+                        store[pair][data[index+window][1]] += 1
                 windows.append(store)
             return windows
 
@@ -106,12 +111,73 @@ class Corpus:
             Can apply a weighting to this. Default is 1.
             '''
             pos_count_list_COPY = [deepcopy(i) for i in pos_count_list]
-            for item in pos_count_list_COPY:
-                for k,v in item.items():
-                    total = sum(item[k].values())
+            for thing in pos_count_list_COPY:
+                for k,v in thing.items():
+                    total = sum(n for n in v.values())
                     for k2,v2 in v.items():
-                        v[k2] = posweight*round(v2/total,8)
+                      v[k2] = posweight*round(v2/total,8)
             return pos_count_list_COPY
+
+        self.all_word_counts = count_all_words(self.data)#create word count list
+        print('Counting words')
+        self.word_list = list(self.all_word_counts.keys())#create word list
+        print('Creating word list')
+
+        def generate_jwd_data(words, moddict):
+            '''
+            I should try rewriting this with generators and yield?
+            Words = a list of words, not (word, POS) tuples!
+
+            '''
+            store = defaultdict(list)
+            for i, w in enumerate(words):
+                print('Doing', w, ':', i+1,'/', len(words))
+                store[w].append(sorted([[m, jwd(w,m)] for m in moddict], key=itemgetter(1),reverse=True)[0:5])
+            return store
+
+        if include_JWD == True:
+            if os.path.isfile('pickled/jwd_data_' + self.filename_nopath + ".pickle") == True:
+                self.jwd_data = pickle.load(open('pickled/jwd_data_' + self.filename_nopath + ".pickle",'rb'))
+                print('Found JWD_data: loading it')
+            else:
+                print('No JWD_data found: generating (this will take one million years)')
+                words_to_use = [i[0] for i in self.word_list]
+                self.jwd_data = generate_jwd_data(words_to_use, self.modern_dictionary)
+                print('Pickling it.')
+                pickle.dump(self.jwd_data, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
+        else:
+            print('Skipping JWD step')
+
+
+        curr = [0]
+        prev = [-1*i for i in range(1,self.windowsize+1)]
+        post = [i for i in range(1,self.windowsize+1)]
+        self.distances = prev + curr + post#create window positions. Distance = how far to each side of the current word to look at
+        print('Creating window span')
+
+        curr = ['curr']
+        prev = ['prev'*i for i in range(1,self.windowsize+1)]
+        post = ['next'*i for i in range(1,self.windowsize+1)]
+        self.tag_prefixes = prev[::-1] + curr + post #create tag prefixes for use in the combining of POS counts later
+        print('Generating tag prefixes')
+
+        self.pos_count_list = [i for i in sweep(self.data, self.distances)]# use sweep() to create the full pos count list
+        print("Generating POS counts in each word's window")
+
+        self.prob_list = counts_to_probs(self.pos_count_list, self.posweight) #convert the count list to a prob list
+        print('Converting counts to conditional frequencies')
+
+        if include_JWD == True:
+            if os.path.isfile('pickled/jwd_data_' + self.filename_nopath + ".pickle") == True:
+                self.jwd_data = pickle.load(open('pickled/jwd_data_' + self.filename_nopath + ".pickle",'rb'))
+                print('Found JWD_data: loading it')
+            else:
+                print('No JWD_data found: generating (this will take one million years)')
+                self.jwd_data = generate_jwd_data(self.word_list, self.modern_dictionary)
+                print('Pickling it.')
+                pickle.dump(self.jwd_data, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
+        else:
+            print('Skipping JWD step')
 
         def padded_ngram_dict(word):
             '''
@@ -138,27 +204,6 @@ class Corpus:
                 return bigramdict
             return padd_list_to_dict(bigrams_with_padding(word))
 
-        self.all_word_counts = count_all_words(self.data)#create word count list
-        print('Counting words')
-        self.word_list = list(self.all_word_counts.keys())#create word list
-        print('Creating word list')
-
-        curr = [0]
-        prev = [-1*i for i in range(1,self.windowsize+1)]
-        post = [i for i in range(1,self.windowsize+1)]
-        self.distances = prev + curr + post#create window positions. Distance = how far to each side of the current word to look at
-        print('Creating window span')
-
-        curr = ['curr']
-        prev = ['prev'*i for i in range(1,self.windowsize+1)]
-        post = ['next'*i for i in range(1,self.windowsize+1)]
-        self.tag_prefixes = prev[::-1] + curr + post #create tag prefixes for use in the combining of POS counts later
-        print('Generating tag prefixes')
-
-        self.pos_count_list = [i for i in sweep(self.data, self.distances)]# use sweep() to create the full pos count list
-        print("Generating POS counts in each word's window")
-        self.prob_list = counts_to_probs(self.pos_count_list, self.posweight) #convert the count list to a prob list
-        print('Converting counts to conditional frequencies')
 
         def populate(word, prob_list, tag_prefix):
             '''
@@ -172,37 +217,6 @@ class Corpus:
                     temp[tag_prefix+k] = v
             return temp
 
-        def generate_jwd_data(words, moddict):
-            '''
-            I should try rewriting this with generators and yield
-            '''
-            store = defaultdict(list)
-            for i, w in enumerate(words):
-                print('Doing', w, ':', i+1,'/', len(words))
-                store[w].append(sorted([[m, jwd(w,m)] for m in moddict], key=itemgetter(1),reverse=True)[0:5])
-            return store
-
-        if include_JWD == True:
-            if os.path.isfile('pickled/jwd_data_' + self.filename_nopath + ".pickle") == True:
-                self.jwd_data = pickle.load(open('pickled/jwd_data_' + self.filename_nopath + ".pickle",'rb'))
-                print('Found JWD_data: loading it')
-            else:
-                print('No JWD_data found: generating (this will take one million years)')
-                self.jwd_data = generate_jwd_data(self.word_list, self.modern_dictionary)
-                print('Pickling it.')
-                pickle.dump(self.jwd_data, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
-        else:
-            print('Skipping JWD step')
-
-
-        '''
-        The next bit just pulls it all together.
-        The end result is the list of labels and list of feature dictionaries for that label.
-        They are coindexed such that label[i] has its features at combined_prob_list[i]
-        The feature list is a big dictionary.
-        Its keys will be a combination of position prefix and POS tags seen in that position, along with a probability.
-        '''
-
         self.raw_features = []
         self.labels = []
 
@@ -214,10 +228,10 @@ class Corpus:
                 temp = populate(word, self.prob_list[i], self.tag_prefixes[i])
                 store.append(temp)
                 if include_bigrams == True:
-                    bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word).items()}
+                    bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word[0]).items()}
                     store.append(bg)
             if include_JWD == True:
-                for jwditem in self.jwd_data[word]:
+                for jwditem in self.jwd_data[word[0]]:
                     for pair in jwditem:
                         store.append({'JWD'+pair[0]:pair[1]})
             for d in store:
@@ -226,18 +240,6 @@ class Corpus:
             self.raw_features.append(combo)
         print('Creating label list')
         print('Combing feature sets')
-
-        '''
-        Make "verbose labels" that include diagnostic info about words in terms of POS
-        self.windowsize used as an index of self.pos_count_list gives the middle list, which
-        is the current-POS labels.
-        Use count list instead of prob list because raw counts are more informative to a
-        human reader.
-        '''
-        self.verbose_labels = []
-        for i in self.labels:
-            self.verbose_labels.append((i, dict(self.pos_count_list[self.windowsize][i])))
-
 
 
         '''
@@ -253,35 +255,27 @@ class Corpus:
 
         print('All done')
 
-
     def find(self, word):
         '''
         Public function to search the label/feature lists for a specific word..
         '''
         for i,n in enumerate(self.labels):
-            if n == word:
+            if n[0] == word:
                 return self.raw_features[i]
 
-    def find_by_start(self, n, vectors=True, verbose=True):
+    def find_by_start(self, n, vectors=True):
         '''
         Returns labels and features for words beginning with n
         n can be one char or more.
         '''
         l = []
         f = []
-        if verbose == True:
-            for i,x in enumerate(self.verbose_labels):
-                if x[0][0:len(n)] == n:
-                    l.append(x)
-                    f.append(self.raw_features[i])
-        else:
-            for i,x in enumerate(self.labels):
-                if x[0:len(n)] == n:
-                    l.append(x)
-                    f.append(self.raw_features[i])
+        for i,x in enumerate(self.labels):
+            if x[0][0:len(n)] == n:
+                l.append(x)
+                f.append(self.raw_features[i])
         if vectors == True:
             return l, self.vectoriserObject.fit_transform(f)
-
         else:
             return l, f
 
@@ -314,6 +308,11 @@ class Corpus:
         print("Include_Bigrams   ", self.include_bigrams)
 
 
+
+
+
+
+
 '''
 from Corpusobject import Corpus
 
@@ -330,6 +329,20 @@ paston4 = Corpus('corpora/paston', windowsize=0, bigramweight=1,
     posweight=1, include_JWD=False, include_bigrams=False, is_paston=True)
 
 '''
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

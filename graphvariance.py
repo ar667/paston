@@ -39,7 +39,7 @@ settings4 = [i for i in product([0,1,2,3,4], [True], [True])]
 
 k_ranges4 = [100,150,200,250,300,350,400,450,500,550,600]
 
-results4 = run_tests(settings4, k_ranges4)
+results4 = run_tests('r', settings4, k_ranges4)
 
 do_graph(results4,settings4)
 
@@ -48,9 +48,38 @@ settings5 = [i for i in product([0], [True, False], [True,False])]
 
 k_ranges5 = [100,150,200,250,300,350,400,450,500,550,600,650,700,750,800]
 
-results5 = run_tests(settings5, k_ranges5)
+results5 = run_tests('r', settings5, k_ranges5)
 
 do_graph(results5,settings5)
+------
+settings6 = [i for i in product([1], [True], [True], [0.5,1.0], [0.5,1.0])]
+
+k_ranges6 = [100,150,200,250,300,350,400,450,500,550,600,650,700,750]
+
+results6 = run_tests('r', settings6, k_ranges6)
+
+do_graph(results6,settings6)
+
+------
+settings7 = [i for i in product([1], [True], [True], [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0], [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0])]
+
+k_ranges7 = [300,600]
+
+results7 = run_tests('r', settings7, k_ranges7)
+
+do_graph(results7,settings7)
+
+------
+
+Proof case that w=0, J=F, B=F results in k=number_of_POS_tags_used=~23
+
+settings8 = [i for i in product([0], [False], [False],[1],[1])]
+
+k_ranges8 = [10,20,30,40,50,60]
+
+results8 = run_tests('r', settings8, k_ranges8)
+
+do_graph(results8,settings8)
 
 
 '''
@@ -84,7 +113,7 @@ def data_for_graph(steps, vects):
 def run_tests(letter, corpora_settings, k_ranges):
     corps = []
     for setting in corpora_settings:
-        corps.append(Corpus('corpora/paston', windowsize=setting[0], include_JWD=setting[1], include_bigrams=setting[2]))
+        corps.append(Corpus('corpora/paston', windowsize=setting[0], include_JWD=setting[1], include_bigrams=setting[2], posweight=setting[3], bigramweight=setting[4]))
     vects = []
     for i, corp in enumerate(corps):
         print('Getting vects', i, 'of', len(corps))
@@ -98,10 +127,11 @@ def run_tests(letter, corpora_settings, k_ranges):
     return results
 
 def do_graph(data, settings):
-    lines = ["-","--","-.",":"]
-    linecycler = cycle(lines)
+    lines = cycle(["-","--","-.",":"])
+    markers = cycle(['H', '+', '*', 'o', 's', 'D', 'x', '.',','])
+    marker_space = cycle([1,2,3])
     for e,i in enumerate(data):
-        pylab.plot(i[1],i[2], linestyle=next(linecycler), label=settings[e])
+        pylab.plot(i[1],i[2], linestyle=next(lines), marker=next(markers), markevery=next(marker_space), label=settings[e])
     pylab.xlabel('Number of clusters')
     pylab.ylabel('Percentage of variance explained')
     pylab.title('Variance Explained vs. k')
@@ -144,6 +174,18 @@ for i, x in enumerate(settings4):
         s4.append(x)
         r4.append(results4[i])
 
+s1 = []
+r1 = []
+for i, x in enumerate(settings7):
+    if x[3] == 1.0:
+        s1.append(x)
+        r1.append(results7[i])
+
+s2 = []
+r2 = []
+for i, x in enumerate(settings7):
+    if x[4] == 1.0:
+        s2.append(x)
+        r2.append(results7[i])
+
 '''
-
-
