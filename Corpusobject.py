@@ -10,6 +10,7 @@ from itertools import product
 from multiprocessing import Pool
 import csv
 from sklearn.cluster import KMeans as KM
+from datetime import datetime as DT
 
 class Corpus:
     def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True, is_paston=True):
@@ -227,6 +228,19 @@ class Corpus:
         print('Combing feature sets')
 
         '''
+        Make "verbose labels" that include diagnostic info about words in terms of POS
+        self.windowsize used as an index of self.pos_count_list gives the middle list, which
+        is the current-POS labels.
+        Use count list instead of prob list because raw counts are more informative to a
+        human reader.
+        '''
+        self.verbose_labels = []
+        for i in self.labels:
+            self.verbose_labels.append((i, dict(self.pos_count_list[self.windowsize][i])))
+
+
+
+        '''
         Use DictVectorizer to normalise the feature vectors for use in sklearn
         '''
         self.vectoriserObject = DictVectorizer(sparse=False)
@@ -248,17 +262,23 @@ class Corpus:
             if n == word:
                 return self.raw_features[i]
 
-    def find_by_start(self, n, vectors=True):
+    def find_by_start(self, n, vectors=True, verbose=True):
         '''
         Returns labels and features for words beginning with n
         n can be one char or more.
         '''
         l = []
         f = []
-        for i,x in enumerate(self.labels):
-            if x[0:len(n)] == n:
-                l.append(x)
-                f.append(self.raw_features[i])
+        if verbose == True:
+            for i,x in enumerate(self.verbose_labels):
+                if x[0][0:len(n)] == n:
+                    l.append(x)
+                    f.append(self.raw_features[i])
+        else:
+            for i,x in enumerate(self.labels):
+                if x[0:len(n)] == n:
+                    l.append(x)
+                    f.append(self.raw_features[i])
         if vectors == True:
             return l, self.vectoriserObject.fit_transform(f)
 
@@ -275,11 +295,16 @@ class Corpus:
                 out.writerow(i)
         print('Wrote to', fname)
 
-    def do_KM(self, letter, k, iter=200, dump=False, parr=-2):
+    def do_KM(self, letter, k, iter=200, dump=True, parr=-2):
         l,v = self.find_by_start(letter)
         km_obj = KM(n_clusters=k, max_iter=iter, n_jobs=parr)
         results = km_obj.fit(v)
-        return l, results.labels_
+        if dump == True:
+            filename = DT.now().strftime('%d%m%y-%H%M%S') + "-" + letter.upper() + '-' + 'W' + str(self.windowsize) + str(self.include_JWD)[0] + str(self.include_bigrams)[0] + '-k' + str(k)
+            self.dump(l, results.labels_, filename)
+            return l, results.labels_
+        else:
+            return l, results.labels_
 
     def print_config(self):
         print("Window size       ", self.windowsize)
@@ -296,13 +321,13 @@ paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
 
 paston2 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
+    posweight=1, include_JWD=True, include_bigrams=False, is_paston=True)
 
 paston3 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=False, include_bigrams=True, is_paston=True)
 
-paston4 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=True, include_bigrams=False, is_paston=True)
+paston4 = Corpus('corpora/paston', windowsize=0, bigramweight=1,
+    posweight=1, include_JWD=False, include_bigrams=False, is_paston=True)
 
 '''
 
