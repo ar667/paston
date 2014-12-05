@@ -14,11 +14,15 @@ from datetime import datetime as DT
 
 '''
 paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
+    posweight=1, include_JWD=True, include_bigrams=True)
+
+pastonBNC = Corpus('corpora/bnc', windowsize=1, bigramweight=1,
+    posweight=1, include_JWD=True, include_bigrams=True)
+
 '''
 
 class Corpus:
-    def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True, is_paston=True):
+    def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True):
         #example junk: junk={'FW', '.', ',', "'", '"'}
         self.windowsize = windowsize
         self.bigramweight = bigramweight
@@ -27,11 +31,7 @@ class Corpus:
         self.include_JWD = include_JWD
         self.include_bigrams = include_bigrams
 
-        with open('data/moderndictionary', 'r') as file:
-            self.modern_dictionary = file.read()
-        self.modern_dictionary = self.modern_dictionary.splitlines()
-
-        if is_paston == True:
+        def process_paston():
             with open(filename) as file:
                 raw_text = file.read()#load raw file
             letters_temp = raw_text.split('<Q')#split into letters based on <Q text
@@ -62,8 +62,26 @@ class Corpus:
             #self.data = [pair for pair in data3]# if pair[1] not in junk]#This returns everything, removing junk things and punk
             self.data = [(x.lower(),y) for (x,y) in data3]
             print('Processing', filename)
-        else:
-            print("Not implemented")
+
+        def process_bnc():
+            with open(filename, 'rb') as file:
+                raw_data = pickle.load(file)
+            for s in raw_data:
+                for i in range(1,windowsize+1):
+                    s.append(("ENDPAD+" + str(i) , 'END+' + str(i)))
+                    s.insert(0,("STARTPAD-" + str(i) , 'START-' + str(i)))
+            data1 = []
+            for s in raw_data:
+                for pair in s:
+                    data1.append(pair)
+            self.data = [(x.lower(),y) for (x,y) in data1]
+            print('Processing', filename)
+
+
+        if filename == 'corpora/paston':
+            process_paston()
+        if filename == 'corpora/bnc':
+            process_bnc()
 
         def count_all_words(data):
             '''
@@ -123,16 +141,19 @@ class Corpus:
         self.word_list = list(self.all_word_counts.keys())#create word list
         print('Creating word list')
 
-        def generate_jwd_data(words, moddict):
+        def generate_jwd_data(words):
             '''
             I should try rewriting this with generators and yield?
             Words = a list of words, not (word, POS) tuples!
 
             '''
+            with open('data/moderndictionary', 'r') as file:
+                modern_dictionary = file.read()
+            modern_dictionary = modern_dictionary.splitlines()
             store = defaultdict(list)
             for i, w in enumerate(words):
                 print('Doing', w, ':', i+1,'/', len(words))
-                store[w].append(sorted([[m, jwd(w,m)] for m in moddict], key=itemgetter(1),reverse=True)[0:5])
+                store[w].append(sorted([[m, jwd(w,m)] for m in modern_dictionary], key=itemgetter(1),reverse=True)[0:5])
             return store
 
         if include_JWD == True:
@@ -142,7 +163,7 @@ class Corpus:
             else:
                 print('No JWD_data found: generating (this will take one million years)')
                 words_to_use = [i[0] for i in self.word_list]
-                self.jwd_data = generate_jwd_data(words_to_use, self.modern_dictionary)
+                self.jwd_data = generate_jwd_data(words_to_use)
                 print('Pickling it.')
                 pickle.dump(self.jwd_data, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
         else:
@@ -173,7 +194,7 @@ class Corpus:
                 print('Found JWD_data: loading it')
             else:
                 print('No JWD_data found: generating (this will take one million years)')
-                self.jwd_data = generate_jwd_data(self.word_list, self.modern_dictionary)
+                self.jwd_data = generate_jwd_data(self.word_list, modern_dictionary)
                 print('Pickling it.')
                 pickle.dump(self.jwd_data, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
         else:
@@ -316,20 +337,20 @@ class Corpus:
 '''
 from Corpusobject import Corpus
 
-paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=True, include_bigrams=True, is_paston=True)
+paston1 = Corpus('corpora/paston', windowsize=0, bigramweight=1,
+    posweight=1, include_JWD=True, include_bigrams=True)
 
 paston2 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=True, include_bigrams=False, is_paston=True)
+    posweight=1, include_JWD=True, include_bigrams=False)
 
 paston3 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=False, include_bigrams=True, is_paston=True)
+    posweight=1, include_JWD=False, include_bigrams=True)
 
 paston4 = Corpus('corpora/paston', windowsize=0, bigramweight=1,
-    posweight=1, include_JWD=False, include_bigrams=False, is_paston=True)
+    posweight=1, include_JWD=False, include_bigrams=False)
+
 
 '''
-
 
 
 
