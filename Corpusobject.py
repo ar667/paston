@@ -16,13 +16,16 @@ from datetime import datetime as DT
 paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=True, include_bigrams=True)
 
+paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
+    posweight=1, include_JWD=True, include_bigrams=True, curr_POS_weight=1.5)
+
 pastonBNC = Corpus('corpora/bnc', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=True, include_bigrams=True)
 
 '''
 
 class Corpus:
-    def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True):
+    def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True, curr_POS_weight=1):
         #example junk: junk={'FW', '.', ',', "'", '"'}
         self.windowsize = windowsize
         self.bigramweight = bigramweight
@@ -31,7 +34,7 @@ class Corpus:
         self.include_JWD = include_JWD
         self.include_bigrams = include_bigrams
 
-        def process_paston():
+        def process_paston_data():
             with open(filename) as file:
                 raw_text = file.read()#load raw file
             letters_temp = raw_text.split('<Q')#split into letters based on <Q text
@@ -60,10 +63,10 @@ class Corpus:
                     data3.append(pair)#This flattens the whole thing into a big long list of tuples
 
             #self.data = [pair for pair in data3]# if pair[1] not in junk]#This returns everything, removing junk things and punk
-            self.data = [(x.lower(),y) for (x,y) in data3]
             print('Processing', filename)
+            return [(x.lower(),y) for (x,y) in data3]
 
-        def process_bnc():
+        def process_bnc_data():
             with open(filename, 'rb') as file:
                 raw_data = pickle.load(file)
             for s in raw_data:
@@ -74,14 +77,14 @@ class Corpus:
             for s in raw_data:
                 for pair in s:
                     data1.append(pair)
-            self.data = [(x.lower(),y) for (x,y) in data1]
             print('Processing', filename)
+            return [(x.lower(),y) for (x,y) in data1]
 
 
         if filename == 'corpora/paston':
-            process_paston()
+            self.data = process_paston_data()
         if filename == 'corpora/bnc':
-            process_bnc()
+            self.data = process_bnc_data()
 
         def count_all_words(data):
             '''
@@ -116,7 +119,7 @@ class Corpus:
                 for index, pair in enumerate(data):
                     if pair[0][0:6] not in ['startp','endpad']:
                         store[pair][data[index+window][1]] += 1
-                windows.append(store)
+                windows.append({k:dict(v) for k,v in store.items()})
             return windows
 
         def counts_to_probs(pos_count_list, posweight):
@@ -147,7 +150,7 @@ class Corpus:
             Words = a list of words, not (word, POS) tuples!
 
             '''
-            with open('data/moderndictionary', 'r') as file:
+            with open('data/moderndictionary', 'r') as file:#This is hardcoded....
                 modern_dictionary = file.read()
             modern_dictionary = modern_dictionary.splitlines()
             store = defaultdict(list)
@@ -155,20 +158,6 @@ class Corpus:
                 print('Doing', w, ':', i+1,'/', len(words))
                 store[w].append(sorted([[m, jwd(w,m)] for m in modern_dictionary], key=itemgetter(1),reverse=True)[0:5])
             return store
-
-        if include_JWD == True:
-            if os.path.isfile('pickled/jwd_data_' + self.filename_nopath + ".pickle") == True:
-                self.jwd_data = pickle.load(open('pickled/jwd_data_' + self.filename_nopath + ".pickle",'rb'))
-                print('Found JWD_data: loading it')
-            else:
-                print('No JWD_data found: generating (this will take one million years)')
-                words_to_use = [i[0] for i in self.word_list]
-                self.jwd_data = generate_jwd_data(words_to_use)
-                print('Pickling it.')
-                pickle.dump(self.jwd_data, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
-        else:
-            print('Skipping JWD step')
-
 
         curr = [0]
         prev = [-1*i for i in range(1,self.windowsize+1)]
@@ -188,17 +177,21 @@ class Corpus:
         self.prob_list = counts_to_probs(self.pos_count_list, self.posweight) #convert the count list to a prob list
         print('Converting counts to conditional frequencies')
 
-        if include_JWD == True:
-            if os.path.isfile('pickled/jwd_data_' + self.filename_nopath + ".pickle") == True:
-                self.jwd_data = pickle.load(open('pickled/jwd_data_' + self.filename_nopath + ".pickle",'rb'))
-                print('Found JWD_data: loading it')
+        def load_jwd_data():
+            if include_JWD == True:
+                if os.path.isfile('pickled/jwd_data_' + self.filename_nopath + ".pickle") == True:
+                    print('Found JWD_data: loading it')
+                    return  pickle.load(open('pickled/jwd_data_' + self.filename_nopath + ".pickle",'rb'))
+                else:
+                    print('No JWD_data found: generating (this will take one million years)')
+                    jwd_stuff = generate_jwd_data([i[0] for i in self.word_list])
+                    print('Pickling it.')
+                    pickle.dump(jwd_stuff, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
+                    return jwd_stuff
             else:
-                print('No JWD_data found: generating (this will take one million years)')
-                self.jwd_data = generate_jwd_data(self.word_list, modern_dictionary)
-                print('Pickling it.')
-                pickle.dump(self.jwd_data, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
-        else:
-            print('Skipping JWD step')
+                print('Skipping JWD step')
+
+        self.jwd_data = load_jwd_data()
 
         def padded_ngram_dict(word):
             '''
@@ -226,15 +219,34 @@ class Corpus:
             return padd_list_to_dict(bigrams_with_padding(word))
 
 
-        def populate(word, prob_list, tag_prefix):
+        # def populate_old(word, prob_list, tag_prefix):
+        #     '''
+        #     A single word, a single list of probabilities and a single tag prefix are used
+        #     to create a single dictionary for that word, position and tag.
+        #     k = POS tag combined with a positional prefix
+        #     v = count of that POS tag in that position
+        #     '''
+        #     temp = {}
+        #     for k,v in prob_list[word].items():
+        #             temp[tag_prefix+k] = v
+        #     return temp
+
+        def populate(word, prob_list, tag_prefix, ind):
             '''
+            This lets you assign a weight to the POS tag of the word (whilst not giving weight to neighbouring word POS)
+            Which has the result of separating clusters into fairly strong POS-groups.
+
             A single word, a single list of probabilities and a single tag prefix are used
             to create a single dictionary for that word, position and tag.
             k = POS tag combined with a positional prefix
             v = count of that POS tag in that position
             '''
             temp = {}
-            for k,v in prob_list[word].items():
+            if ind == self.windowsize:
+                for k,v in prob_list[word].items():
+                    temp[tag_prefix+k] = v*curr_POS_weight
+            else:
+                for k,v in prob_list[word].items():
                     temp[tag_prefix+k] = v
             return temp
 
@@ -246,7 +258,7 @@ class Corpus:
             combo = {}
             self.labels.append(word)
             for i in range(len(self.tag_prefixes)):
-                temp = populate(word, self.prob_list[i], self.tag_prefixes[i])
+                temp = populate(word, self.prob_list[i], self.tag_prefixes[i], i)#YOU ADDED i HERE!!!
                 store.append(temp)
                 if include_bigrams == True:
                     bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word[0]).items()}
@@ -337,7 +349,7 @@ class Corpus:
 '''
 from Corpusobject import Corpus
 
-paston1 = Corpus('corpora/paston', windowsize=0, bigramweight=1,
+paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=True, include_bigrams=True)
 
 paston2 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
