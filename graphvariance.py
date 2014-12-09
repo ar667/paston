@@ -3,10 +3,15 @@ Functions to generate variance graphs for settings
 
 Run as:
 
-settings = [list of tuples (A,B,C)], where:
+settings = [list of tuples (A,B,C,D,E,F)], where:
     A = a list of ints for windowsize
     B = list of boolean True/False for include_JWD setting
     C = list of boolean True/False for include_bigrams setting
+    D = int for JWD weight
+    E = int for bigram weight
+    F = int for curr_POS_weight
+
+The ones below are out of date.
 
 ranges = list of ints, for use as K setting in kmeans
 
@@ -81,9 +86,30 @@ results8 = run_tests('r', settings8, k_ranges8)
 
 do_graph(results8,settings8)
 
+------
+
+Proof case that w=0, J=F, B=F results in k=number_of_POS_tags_used=~23
+
+settings8 = [i for i in product([0], [True], [True],[1],[1])]
+
+k_ranges8 = [10,20,30,40,50,60]
+
+results8 = run_tests('r', settings8, k_ranges8)
+
+do_graph(results8,settings8)
+
+----
+
+settings8 = [i for i in product([0], [True], [True],[1],[1])]
+
+k_ranges8 = [700,750,800,900,1000]
+
+results8 = run_tests('r', settings8, k_ranges8)
+
+do_graph(results8,settings8)
 
 '''
-
+#settings_example = [i for i in product([windowsize], [JWD?], [Bigram?],[JWD weight],[Bigram weight], [currPOSweight])]
 
 import numpy as np
 from scipy.spatial.distance import cdist, pdist
@@ -113,7 +139,7 @@ def data_for_graph(steps, vects):
 def run_tests(letter, corpora_settings, k_ranges):
     corps = []
     for setting in corpora_settings:
-        corps.append(Corpus('corpora/paston', windowsize=setting[0], include_JWD=setting[1], include_bigrams=setting[2], posweight=setting[3], bigramweight=setting[4]))
+        corps.append(Corpus('corpora/paston', windowsize=setting[0], include_JWD=setting[1], include_bigrams=setting[2], posweight=setting[3], bigramweight=setting[4], curr_POS_weight=setting[5]))
     vects = []
     for i, corp in enumerate(corps):
         print('Getting vects', i, 'of', len(corps))
