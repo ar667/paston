@@ -98,7 +98,7 @@ class Corpus:
                 word_list[pair] = word_list.get(pair,0) + 1
             junk = []
             for k in word_list.keys():
-                if k[0].startswith('startpad') or k[0].startswith('endpad'):
+                if k[0].startswith('startpad') or k[0].startswith('endpad') or k[1] == 'FW':#remove foreign words
                     junk.append(k)
             return {k:v for k,v in word_list.items() if k not in junk}
 
