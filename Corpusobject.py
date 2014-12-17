@@ -7,25 +7,24 @@ import pickle
 from operator import itemgetter
 import os
 from itertools import product
-from multiprocessing import Pool
 import csv
 from sklearn.cluster import KMeans as KM
 from datetime import datetime as DT
 
 '''
-paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=True, include_bigrams=True)
+paston1 = Corpus('corpora/paston', windowsize=0, bigramweight=1,
+    posweight=0, include_JWD=False, include_bigrams=True, curr_POS_weight=0)
 
 paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=True, include_bigrams=True, curr_POS_weight=1.5)
 
-pastonBNC = Corpus('corpora/bnc', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=True, include_bigrams=True)
-
+bncCorpus = Corpus('corpora/bnc', windowsize=0, bigramweight=1,
+    posweight=1, include_JWD=False, include_bigrams=False, curr_POS_weight=1)
 '''
 
 class Corpus:
-    def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1, include_JWD=True, include_bigrams=True, curr_POS_weight=1):
+    def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1,
+        include_JWD=True, include_bigrams=True, curr_POS_weight=1):
         #example junk: junk={'FW', '.', ',', "'", '"'}
         self.windowsize = windowsize
         self.bigramweight = bigramweight
@@ -33,6 +32,7 @@ class Corpus:
         self.filename_nopath = filename.split('/')[1]
         self.include_JWD = include_JWD
         self.include_bigrams = include_bigrams
+        self.curr_POS_weight = curr_POS_weight
 
         def process_paston_data():
             with open(filename) as file:
@@ -159,6 +159,10 @@ class Corpus:
                 store[w].append(sorted([[m, jwd(w,m)] for m in modern_dictionary], key=itemgetter(1),reverse=True)[0:5])
             return store
 
+        def make_filename():
+            name = BLAH
+
+
         curr = [0]
         prev = [-1*i for i in range(1,self.windowsize+1)]
         post = [i for i in range(1,self.windowsize+1)]
@@ -244,7 +248,7 @@ class Corpus:
             temp = {}
             if ind == self.windowsize:
                 for k,v in prob_list[word].items():
-                    temp[tag_prefix+k] = v*curr_POS_weight
+                    temp[tag_prefix+k] = v*self.curr_POS_weight
             else:
                 for k,v in prob_list[word].items():
                     temp[tag_prefix+k] = v
@@ -258,7 +262,7 @@ class Corpus:
             combo = {}
             self.labels.append(word)
             for i in range(len(self.tag_prefixes)):
-                temp = populate(word, self.prob_list[i], self.tag_prefixes[i], i)#YOU ADDED i HERE!!!
+                temp = populate(word, self.prob_list[i], self.tag_prefixes[i], i)#YOU ADDED i HERE!!! So that you can weight the current POS feature!
                 store.append(temp)
                 if include_bigrams == True:
                     bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word[0]).items()}
@@ -337,8 +341,10 @@ class Corpus:
         print("Window size       ", self.windowsize)
         print("Bigram weight     ", self.bigramweight)
         print("POS weight        ", self.posweight)
+        print("CurrPOS weight    ", self.curr_POS_weight)
         print("Include_JWD       ", self.include_JWD)
         print("Include_Bigrams   ", self.include_bigrams)
+        print("corpus            ", self.filename_nopath)
 
 
 
