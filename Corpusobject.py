@@ -18,7 +18,7 @@ paston1 = Corpus('corpora/paston', windowsize=0, bigramweight=1,
 paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=True, include_bigrams=True, curr_POS_weight=1.5)
 
-bncCorpus = Corpus('corpora/bnc', windowsize=0, bigramweight=1,
+bncCorpus = Corpus('corpora/bnc', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=False, include_bigrams=False, curr_POS_weight=1)
 '''
 
@@ -29,7 +29,6 @@ class Corpus:
         self.windowsize = windowsize
         self.bigramweight = bigramweight
         self.posweight = posweight
-        self.filename_nopath = filename.split('/')[1]
         self.include_JWD = include_JWD
         self.include_bigrams = include_bigrams
         self.curr_POS_weight = curr_POS_weight
@@ -83,8 +82,13 @@ class Corpus:
 
         if filename == 'corpora/paston':
             self.data = process_paston_data()
+            self.filename_nopath = filename.split('/')[1]
         if filename == 'corpora/bnc':
             self.data = process_bnc_data()
+            self.filename_nopath = filename.split('/')[1]
+        else:
+            self.data = filename
+            self.filename_nopath = "VarObjOutput"
 
         def count_all_words(data):
             '''

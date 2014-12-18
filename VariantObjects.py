@@ -4,6 +4,7 @@ from itertools import islice
 import random
 import pandas as pd
 import pickle
+from operator import itemgetter
 
 class Instance:
     #An instance is an item in a text
@@ -127,7 +128,7 @@ class Variant(Container):
             print('cutpos is [1] because numcuts is 1 and V')
         else:
             cut_pos = random.sample(range(1,len(V)), num_cuts)#YOU NEED TO SORT THIS NUMERICALLY LOL!!!!
-            print('Doing sample because numcuts', num_cuts, 'with range from 1 to', len(V)-1)
+            print('Doing sample because numcuts', num_cuts, 'with range from 1 to', len(V))
 
         cut_pos = sorted(cut_pos)
         print('Sorted cutpos list')
@@ -142,10 +143,7 @@ class Variant(Container):
         for i, c in enumerate(cut_pos[0:-1]):
             new_chunks.append(V[c:cut_pos[i+1]])
 
-        #print(N)
         selected_new_names = random.sample(N, len(new_chunks))
-        #print(selected_new_names)
-
 
         for pair in zip(selected_new_names, new_chunks):
             for inst in pair[1]:
@@ -160,17 +158,18 @@ class Variant(Container):
         return store
 
 class Type(Container):
-    #Just a Container but with
+    branches = 0
+    leaves = 0
     def __init__(self, *args):
         super().__init__(*args)
         self.ID = "".join([random.choice(ascii_letters+digits) for x in range(15)])
-        self.branches, self.leaves = self.get_foliage()
-
         for variant in self.contents:
             variant.ownerID = self.ID
+        self.branches, self.leaves = self.get_foliage()
 
     def get_foliage(self):
         return len(self), sum([len(i) for i in self.contents])
+
 
     def induce_split(self, known_variants):
         x = self.contents[0].split(known_variants, ID=self.ID)
@@ -187,6 +186,7 @@ class Type(Container):
 
 class Text:
     def __init__(self, *source, known_variants='data/knownvariants2.pickle', verbose=True):
+        print('Importing known variants data')
         self.known_variants = dict(pickle.load(open(known_variants,'rb')))#Don't use defaultdict, just in case...
         self.added_variation = False
         if source:
@@ -222,8 +222,6 @@ class Text:
                     alphaset.add(x)
             self.all_types = self.junk_types.union(alphaset)
 
-
-
             '''
             I am only using instances whose forms start with [a-z].
             In terms of later calculating the variation stats...will this be problematic?
@@ -233,7 +231,6 @@ class Text:
             How do I measure this and should I include it in the final stats? Probably use
             the contents list.
             '''
-
 
             # self.variants = []
             # for item in self.vocabulary:
@@ -262,21 +259,19 @@ class Text:
             var_counts = [t.report_variation() for t in self.all_types]
         return pd.DataFrame(var_counts)
 
-
-
-    def cause_variation(self, known_variants, target):
+    def cause_variation(self, target, no_output=True):
         if self.added_variation == False:
 
             self.variation_info = {}
 
             all_targets = self.alpha_types[target]
-            valid_targets = [i for i in self.alpha_types[target] if i.leaves > 1 and i.contents[0].name in known_variants]
+            valid_targets = [i for i in self.alpha_types[target] if i.leaves > 1 and i.contents[0].name in self.known_variants]
             original_k = len(all_targets)
             targeted = len(valid_targets)
 
             for t in valid_targets:
-                t.induce_split(known_variants)
-            self.added_variation = False
+                t.induce_split(self.known_variants)
+            self.added_variation = True
 
             self.variation_info['original_k'] = original_k
             self.variation_info['targeted'] = targeted
@@ -288,8 +283,12 @@ class Text:
 
             self.variation_info['new_k'] = new_k
 
+            if no_output == False:
+                return self.variation_info
+
         else:
             print('Variation already done. Reinitialise the Text object')
+
 
     def find(self,target):
         store = []
@@ -299,9 +298,19 @@ class Text:
                 store.append(t)
         return store
 
+    def output(self):
+        store = []
+        for inst in self.contents:
+            store.append((inst.form, inst.PoS, inst.position))
+        store = sorted(store, key=itemgetter(2))
+        return [(i[0], i[1]) for i in store]
 
 
-
+    # def __repr__(self):
+    #     if self.added_variation == False:
+    #         "Non-variant Text with {} instances\n".format(len(self))
+    #     else:
+    #         'Variant Text with \n{} instances\n{} original total types\n{} alpha types\n{}'.(len(self), len(self.all_types), len(self.alpha_types_values()))
 
 
 

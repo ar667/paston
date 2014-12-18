@@ -1,6 +1,7 @@
 from collections import defaultdict
 from string import ascii_letters, ascii_lowercase, digits
 from random import choice
+import pandas as pd
 
 class Word:
     #A word is an item in a text
@@ -98,7 +99,7 @@ class Type:
             yield i
 
     def __repr__(self):
-        return "{} with {} variants, over {} instances".format(type(self), len(self.contains_variants), self.total_variants_for_type())
+        return "{} with {} variants, over {} instances".format(type(self), self.total_variants_for_type(), self.total_words_for_type())
 
 
 class Text:
@@ -130,59 +131,6 @@ class Text:
             self.types[temp_name].ID = temp_name
         self.types = dict(self.types)
 
-        def find_type_by_variant_name(self, search_item):
-            results = []
-            for typeID, type_object in self.types.items():
-                for variant_object in type_object:
-                    if variant_object.name.startswith(search_item) == True:
-                        results.append({typeID:type_object})
-            return results
-
-        def compile_stats():
-            stats = {}
-            for letter in ascii_lowercase:
-                stats[letter] = self.find_type_by_variant_name(letter)
-            return stats
-
-        self.variants_alphabetical = compile_stats()
-
-        def calculate_k_and_ksize():
-            #This returns a thing that says what K should be, based on type count.
-            #And how big each cluster should be, in terms of members
-            #K size should equal V-count and T-count, in modern text.
-            stats = defaultdict(list)
-            ksize = defaultdict(list)
-
-            for key,value in self.variants_alphabetical.items():
-                for type_object_dict in value:
-                    for type_ID, type_object in type_object_dict.items():
-                        WHAT AM I DOING???????????????
-                        ksize[key].append([type_object.total_variants_for_type(), type_object.total_words_for_type()])
-
-            for key,value in ksize.items():
-                stats[key].append(('Number of variants across all types', value[0]))
-
-            for key,value in ksize.items():
-                stats[key].append(('Number of words across all types', value[1]))
-
-            #for key,value in ksize.items():
-                #stats[key].append(('Average number of variants per type, equal to average cluster size', sum(value)/len(value)))
-
-            ksize = defaultdict(list)
-
-            for key,value in self.variants_alphabetical.items():
-                for type_object_dict in value:
-                    for type_ID, type_object in type_object_dict.items():
-                        ksize[key].append(type_object.total_words_for_type())
-
-            for key,value in ksize.items():
-                stats[key].append(('blaaaah', sum(value)))
-
-            return dict(stats)
-
-        self.type_sizes_list = calculate_k_and_ksize()
-
-
     def get_text(self):
         return self.text
     def get_words(self):
@@ -192,20 +140,56 @@ class Text:
     def get_variants(self):
         return [i for i in self.variants.keys()]
 
-    def find_type_by_variant_name(self, search_item):
-        results = []
-        for typeID, type_object in self.types.items():
-            for variant_object in type_object:
-                if variant_object.name.startswith(search_item) == True:
-                    results.append({typeID:type_object})
-        return results
 
-
-
-
-
+    def get_stats(self):
+        x = pd.DataFrame(calculate_k_and_ksize(self))
+        x = x.T
+        x.columns = ['Types = k','Variants = available to be in k','Average cluster size','Words for this letter','Words per Type (avg)']
+        return x
 
     def __repr__(self):
         return "{},\nwith\t{} tokens,\n\t{} words,\n\t{} variants,\n\t{} types.".format(type(self), len(self.text), len(self.words), len(self.variants), len(self.types))
+
+
+def find_type_by_variant_name(Text_object, search_item):
+    results = []
+    for typeID, type_object in Text_object.types.items():
+        for variant_object in type_object:
+            if variant_object.name.startswith(search_item) == True:
+                results.append(type_object)
+    return results
+
+def compile_stats(Text_object):
+    stats = {}
+    for letter in ascii_lowercase:
+        stats[letter] = find_type_by_variant_name(Text_object, letter)
+    return stats
+
+def calculate_k_and_ksize(Text_object):
+    #This returns a thing that says what K should be, based on type count.
+    #And how big each cluster should be, in terms of members
+    #K size should equal V-count and T-count, in modern text.
+    stats = defaultdict(list)
+    ksize = defaultdict(list)
+    variants_alphabetical = compile_stats(Text_object)
+
+
+    for key, value in variants_alphabetical.items():
+        for type_object in value:
+            ksize[key].append([1, type_object.total_variants_for_type(), type_object.total_words_for_type()])
+
+    for key, value in ksize.items():
+        typecount = sum([pair[0] for pair in value])
+        varcount = sum([pair[1] for pair in value])
+        k = varcount/typecount
+        wordcount = sum([pair[2] for pair in value])
+        ksize[key] = (typecount, varcount, k, wordcount, round(wordcount/varcount,3))
+
+    #Types with X as first letter,
+    #'Variants across all types',
+    #Variants per type = value of k in kmeans
+    #'Words across all variants'
+    #'Average words per variant'
+    return dict(ksize)
 
 
