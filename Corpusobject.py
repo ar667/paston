@@ -12,8 +12,11 @@ from sklearn.cluster import KMeans as KM
 from datetime import datetime as DT
 
 '''
-paston1 = Corpus('corpora/paston', windowsize=0, bigramweight=1,
-    posweight=0, include_JWD=False, include_bigrams=True, curr_POS_weight=0)
+p1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
+    posweight=0, include_JWD=False, include_bigrams=True, curr_POS_weight=0, use_pos=False)
+
+b1 = Corpus('corpora/bnc', windowsize=0, bigramweight=1,
+    posweight=0, include_JWD=True, include_bigrams=True, curr_POS_weight=0, use_pos=False)
 
 paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=True, include_bigrams=True, curr_POS_weight=1.5)
@@ -24,7 +27,7 @@ bncCorpus = Corpus('corpora/bnc', windowsize=1, bigramweight=1,
 
 class Corpus:
     def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1,
-        include_JWD=True, include_bigrams=True, curr_POS_weight=1):
+        include_JWD=True, include_bigrams=True, curr_POS_weight=1, use_pos=True):
         #example junk: junk={'FW', '.', ',', "'", '"'}
         self.windowsize = windowsize
         self.bigramweight = bigramweight
@@ -33,7 +36,7 @@ class Corpus:
         self.include_bigrams = include_bigrams
         self.curr_POS_weight = curr_POS_weight
 
-        def process_paston_data():
+        def process_paston_data(filename):
             with open(filename) as file:
                 raw_text = file.read()#load raw file
             letters_temp = raw_text.split('<Q')#split into letters based on <Q text
@@ -46,9 +49,13 @@ class Corpus:
                     letter[index] = sentence.split()#splits each sentence into word_POS chunks
             for l in letters3:
                 for s in l:
-                    for i in range(1,windowsize+1):
-                        s.append("ENDPAD+" + str(i) + "_" + 'END+' + str(i))
-                        s.insert(0,"STARTPAD-" + str(i) + "_" + 'START-' + str(i))#This adds padding
+                    if windowsize == 0:
+                        s.append("ENDPAD_END")
+                        s.insert(0,("STARTPAD_START"))
+                    if windowsize > 0:
+                        for i in range(1,windowsize+1):
+                            s.append("ENDPAD+" + str(i) + '_END+' + str(i))
+                            s.insert(0,"STARTPAD-" + str(i) + '_START-' + str(i))
             data = []
             for letter in letters3:
                 for sent in letter:
@@ -65,13 +72,17 @@ class Corpus:
             print('Processing', filename)
             return [(x.lower(),y) for (x,y) in data3]
 
-        def process_bnc_data():
+        def process_bnc_data(filename):
             with open(filename, 'rb') as file:
                 raw_data = pickle.load(file)
             for s in raw_data:
-                for i in range(1,windowsize+1):
-                    s.append(("ENDPAD+" + str(i) , 'END+' + str(i)))
-                    s.insert(0,("STARTPAD-" + str(i) , 'START-' + str(i)))
+                if windowsize == 0:
+                    s.append(("ENDPAD" , 'END'))
+                    s.insert(0,("STARTPAD" , 'START'))
+                if windowsize > 0:
+                    for i in range(1,windowsize+1):
+                        s.append(("ENDPAD+" + str(i) , 'END+' + str(i)))
+                        s.insert(0,("STARTPAD-" + str(i) , 'START-' + str(i)))
             data1 = []
             for s in raw_data:
                 for pair in s:
@@ -79,16 +90,15 @@ class Corpus:
             print('Processing', filename)
             return [(x.lower(),y) for (x,y) in data1]
 
-
         if filename == 'corpora/paston':
-            self.data = process_paston_data()
+            self.data = process_paston_data(filename)
             self.filename_nopath = filename.split('/')[1]
         if filename == 'corpora/bnc':
-            self.data = process_bnc_data()
+            self.data = process_bnc_data(filename)
             self.filename_nopath = filename.split('/')[1]
-        else:
+        if filename not in ['corpora/paston', 'corpora/bnc']:
             self.data = filename
-            self.filename_nopath = "VarObjOutput"
+            self.filename_nopath = "VarObjOutput"#FIX THIS AT SOME POINT
 
         def count_all_words(data):
             '''
@@ -96,35 +106,51 @@ class Corpus:
             k = word
             v = count of that word in the corpus
             All lower case. Does not include the padding
-            '''
-            word_list = {}
-            for pair in data:
-                word_list[pair] = word_list.get(pair,0) + 1
-            junk = []
-            for k in word_list.keys():
-                if k[0].startswith('startpad') or k[0].startswith('endpad') or k[1] == 'FW':#remove foreign words
-                    junk.append(k)
-            return {k:v for k,v in word_list.items() if k not in junk}
 
-        def sweep(data, spread):
+            Two versions. use_pos makes lexical items that are distinguished by POS.
+                So (look, noun) and (look, verb) get an entry each.
+            The other version combines those by orthography, into one entry.
             '''
-            Returns a list of dictionariies. One dictionary per position determined by windowsize.
-            For windowsize of n, sweep will return a list of size 2n+1
-            For each dictionary in the list:
-            k = a word in the word list
-            v = a dictionary, where
-                k = POS tag at position determined by windowsize (w=1 means n=3 and this is equiv to the word and one on either side of it)
-                v = a count for each POS tag
-            '''
+            if use_pos == True:
+                word_list = dict(Counter(data))
+                for junk in [i for i in word_list if i[0].startswith('startpad') or i[0].startswith('endpad')]:
+                    del word_list[junk]
+
+            else:
+                word_list = dict(Counter([i[0] for i in data]))
+                for junk in [i for i in word_list if i.startswith('startpad') or i.startswith('endpad')]:
+                    del word_list[junk]
+
+                '''SHOULD I REMOVE FOREIGN WORDS?'''
+                #Arguments:
+                #   In Paston Letters, yes. Because they are not POS-tagged well. They are all as FW.
+                #   No in modern texts, as they are POS-tagged properly? I dunno...not checked.
+                #   Fuuuuuck.
+            return word_list
+
+        def sweep(distances):
             windows = []
-            for window in spread:
-                store = {k:defaultdict(int) for k in data}
-                store = {k:v for k,v in store.items() if k[0].startswith('startp') == False and k[0].startswith('endpad') == False}
-                for index, pair in enumerate(data):
-                    if pair[0][0:6] not in ['startp','endpad']:
-                        store[pair][data[index+window][1]] += 1
-                windows.append({k:dict(v) for k,v in store.items()})
-            return windows
+
+            if use_pos == True:
+                for position in distances:
+                    store = {k:defaultdict(int) for k in self.data if k[0][0:6] not in ['startp','endpad']}
+                    for index, pair in enumerate(self.data):
+                        if pair in store:
+                            store[pair][self.data[index+position][1]] += 1
+                    windows.append({k:dict(v) for k,v in store.items()})
+                return windows
+
+            if use_pos == False:
+                for position in distances:
+                    store = {k[0]:defaultdict(int) for k in self.data if k[0][0:6] not in ['startp','endpad']}
+                    for index, pair in enumerate(self.data):
+                        if pair[0] in store:
+                            store[pair[0]][self.data[index+position][1]] += 1
+                    windows.append({k:dict(v) for k,v in store.items()})
+                return windows
+
+
+
 
         def counts_to_probs(pos_count_list, posweight):
             '''
@@ -146,26 +172,13 @@ class Corpus:
         self.all_word_counts = count_all_words(self.data)#create word count list
         print('Counting words')
         self.word_list = list(self.all_word_counts.keys())#create word list
+
+        if use_pos == True:
+            self.vocabulary = [i[0] for i in self.word_list]
+        if use_pos == False:
+            self.vocabulary = self.word_list
+
         print('Creating word list')
-
-        def generate_jwd_data(words):
-            '''
-            I should try rewriting this with generators and yield?
-            Words = a list of words, not (word, POS) tuples!
-
-            '''
-            with open('data/moderndictionary', 'r') as file:#This is hardcoded....
-                modern_dictionary = file.read()
-            modern_dictionary = modern_dictionary.splitlines()
-            store = defaultdict(list)
-            for i, w in enumerate(words):
-                print('Doing', w, ':', i+1,'/', len(words))
-                store[w].append(sorted([[m, jwd(w,m)] for m in modern_dictionary], key=itemgetter(1),reverse=True)[0:5])
-            return store
-
-        def make_filename():
-            name = BLAH
-
 
         curr = [0]
         prev = [-1*i for i in range(1,self.windowsize+1)]
@@ -179,27 +192,48 @@ class Corpus:
         self.tag_prefixes = prev[::-1] + curr + post #create tag prefixes for use in the combining of POS counts later
         print('Generating tag prefixes')
 
-        self.pos_count_list = [i for i in sweep(self.data, self.distances)]# use sweep() to create the full pos count list
+        self.pos_count_list = [i for i in sweep(self.distances)]# use sweep() to create the full pos count list
         print("Generating POS counts in each word's window")
 
         self.prob_list = counts_to_probs(self.pos_count_list, self.posweight) #convert the count list to a prob list
         print('Converting counts to conditional frequencies')
 
-        def load_jwd_data():
+        def do_jwd():
             if include_JWD == True:
-                if os.path.isfile('pickled/jwd_data_' + self.filename_nopath + ".pickle") == True:
-                    print('Found JWD_data: loading it')
-                    return  pickle.load(open('pickled/jwd_data_' + self.filename_nopath + ".pickle",'rb'))
+                print('Loading JWD_data from pickle')
+                with open('data/jwd.pickle', 'rb') as file:
+                    jwd_data = pickle.load(file)
+                with open('data/moderndictionary.pickle', 'rb') as file:
+                    modern_dictionary = pickle.load(file)
+
+                #So now all current JWD info is loaded, and the dictionary.
+                #Check to make sure it has 100% coverage of the word_list
+                #Take the symmetric difference of set of JWD_data keys and word_list
+                temp = list(set(self.vocabulary).difference(set(jwd_data)))
+                if len(temp) > 0:
+                    print(len(temp), 'new words need to be added')
+                    for i, new_word in enumerate(temp):
+                        if use_pos == True:
+                            print('Doing new word +pos', new_word, ":", i+1, '/', len(temp))
+                            jwd_data[new_word[0]] = sorted([[m, jwd(new_word[0],m)] for m in modern_dictionary], key=itemgetter(1),reverse=True)[0:5]
+                        if use_pos == False:
+                            print('Doing new word -pos', new_word, ":", i+1, '/', len(temp))
+                            jwd_data[new_word] = sorted([[m, jwd(new_word,m)] for m in modern_dictionary], key=itemgetter(1),reverse=True)[0:5]
+                    with open('data/jwd.pickle', 'wb') as file:
+                        pickle.dump(jwd_data, file)
+                        print('Updating JWD pickle')
+
                 else:
-                    print('No JWD_data found: generating (this will take one million years)')
-                    jwd_stuff = generate_jwd_data([i[0] for i in self.word_list])
-                    print('Pickling it.')
-                    pickle.dump(jwd_stuff, open('pickled/jwd_data_' + self.filename_nopath + ".pickle", 'wb'))
-                    return jwd_stuff
-            else:
+                    print('No new words needed to be added.')
+
+                return jwd_data
+
+            if include_JWD == False:
                 print('Skipping JWD step')
 
-        self.jwd_data = load_jwd_data()
+
+
+        self.jwd_data = do_jwd()
 
         def padded_ngram_dict(word):
             '''
@@ -226,19 +260,6 @@ class Corpus:
                 return bigramdict
             return padd_list_to_dict(bigrams_with_padding(word))
 
-
-        # def populate_old(word, prob_list, tag_prefix):
-        #     '''
-        #     A single word, a single list of probabilities and a single tag prefix are used
-        #     to create a single dictionary for that word, position and tag.
-        #     k = POS tag combined with a positional prefix
-        #     v = count of that POS tag in that position
-        #     '''
-        #     temp = {}
-        #     for k,v in prob_list[word].items():
-        #             temp[tag_prefix+k] = v
-        #     return temp
-
         def populate(word, prob_list, tag_prefix, ind):
             '''
             This lets you assign a weight to the POS tag of the word (whilst not giving weight to neighbouring word POS)
@@ -258,30 +279,77 @@ class Corpus:
                     temp[tag_prefix+k] = v
             return temp
 
-        self.raw_features = []
-        self.labels = []
+        # self.raw_features = []
+        # self.labels = []
 
-        for word in self.word_list:
-            store = []
-            combo = {}
-            self.labels.append(word)
-            for i in range(len(self.tag_prefixes)):
-                temp = populate(word, self.prob_list[i], self.tag_prefixes[i], i)#YOU ADDED i HERE!!! So that you can weight the current POS feature!
-                store.append(temp)
-                if include_bigrams == True:
-                    bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word[0]).items()}
-                    store.append(bg)
-            if include_JWD == True:
-                for jwditem in self.jwd_data[word[0]]:
-                    for pair in jwditem:
-                        store.append({'JWD'+pair[0]:pair[1]})
-            for d in store:
-                for k,v in d.items():
-                    combo[k] = v
-            self.raw_features.append(combo)
+        # for word in self.word_list:
+        #     store = []
+        #     combo = {}
+        #     self.labels.append(word)
+        #     for i in range(len(self.tag_prefixes)):
+        #         temp = populate(word, self.prob_list[i], self.tag_prefixes[i], i)#YOU ADDED i HERE!!! So that you can weight the current POS feature!
+        #         store.append(temp)
+        #         if include_bigrams == True:
+        #             bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word[0]).items()}
+        #             store.append(bg)
+        #     if include_JWD == True:
+        #         for jwditem in self.jwd_data[word[0]]:
+        #             for pair in jwditem:
+        #                 store.append({'JWD'+pair[0]:pair[1]})
+        #     for d in store:
+        #         for k,v in d.items():
+        #             combo[k] = v
+        #     self.raw_features.append(combo)
+
+        def compile_labels_and_features():
+            raw_features = []
+            labels = []
+
+            if use_pos == True:
+
+                for word in self.word_list:
+                    store = []
+                    combo = {}
+                    labels.append(word)
+                    for i in range(len(self.tag_prefixes)):
+                        temp = populate(word, self.prob_list[i], self.tag_prefixes[i], i)#YOU ADDED i HERE!!! So that you can weight the current POS feature!
+                        store.append(temp)
+                        if include_bigrams == True:
+                            bg = {k:bigramweight*v for k,v in padded_ngram_dict(word[0]).items()}
+                            store.append(bg)
+                    if include_JWD == True:
+                        for jwditem in self.jwd_data[word[0]]:
+                            store.append({'JWD'+jwditem[0]:jwditem[1]})
+                    for d in store:
+                        for k,v in d.items():
+                            combo[k] = v
+                    raw_features.append(combo)
+
+            else:
+
+                for word in self.word_list:
+                    store = []
+                    combo = {}
+                    labels.append(word)
+                    for i in range(len(self.tag_prefixes)):
+                        temp = populate(word, self.prob_list[i], self.tag_prefixes[i], i)#YOU ADDED i HERE!!! So that you can weight the current POS feature!
+                        store.append(temp)
+                        if include_bigrams == True:
+                            bg = {k:bigramweight*v for k,v in padded_ngram_dict(word).items()}
+                            store.append(bg)
+                    if include_JWD == True:
+                        for jwditem in self.jwd_data[word]:
+                            store.append({'JWD'+jwditem[0]:jwditem[1]})
+                    for d in store:
+                        for k,v in d.items():
+                            combo[k] = v
+                    raw_features.append(combo)
+
+            return labels, raw_features
+
         print('Creating label list')
         print('Combing feature sets')
-
+        self.labels, self.raw_features = compile_labels_and_features()
 
         '''
         Use DictVectorizer to normalise the feature vectors for use in sklearn
