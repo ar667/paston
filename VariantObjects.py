@@ -1,6 +1,6 @@
 from collections import defaultdict
 from string import ascii_letters, ascii_lowercase, digits
-from itertools import islice
+from itertools import islice, product
 import random
 import pandas as pd
 import pickle
@@ -87,56 +87,56 @@ class Variant(Container):
             return self
 
         N = [i for i in known_variants[self.name]]
-        print('N initially is', N)
+        # print('N initially is', N)
         N.append(self.name) #The N list
-        print('N is now', N)
-        print(self.name)
+        # print('N is now', N)
+        # print(self.name)
 
         V = [i for i in self.contents] #The V list. Named here for reminder.
 
         min_cuts = 1
-        print('Mincuts:', min_cuts)
+        # print('Mincuts:', min_cuts)
 
-        print('N is', len(N))
-        print('V is', len(V))
+        # print('N is', len(N))
+        # print('V is', len(V))
 
         if len(V) >= len(N):
             if len(N) == 2:
                 max_cuts = 1
-                print('V >= N and N == 2, so max_cuts is', len(N))
+                # print('V >= N and N == 2, so max_cuts is', len(N))
             else:
                 max_cuts = len(N) - 1#Take away 1 because cuts != labels/chunks
-                print('V longer than or equal to N but N > 2. Max is set to', max_cuts)
+                # print('V longer than or equal to N but N > 2. Max is set to', max_cuts)
         if len(V) < len(N):
             if len(V) == 2:
                 max_cuts = 1
             else:
                 max_cuts = len(V) - 2#Take away 2, not 1, because the first 0 and len are not valid cuts. DUH.
-        print('V is shorter than N, so max_cuts is', max_cuts)
+        # print('V is shorter than N, so max_cuts is', max_cuts)
 
-        print('Maxcuts:', max_cuts)
+        # print('Maxcuts:', max_cuts)
 
         if max_cuts == 1:
             num_cuts = 1
-            print('min and max cuts were 1, so setting numcuts to 1, too')
+            # print('min and max cuts were 1, so setting numcuts to 1, too')
         else:
             num_cuts = random.randint(min_cuts, max_cuts)
-            print('Numcuts not equal to 1:', num_cuts)
+            # print('Numcuts not equal to 1:', num_cuts)
 
         if num_cuts == 1 and len(V) == 2:
             cut_pos = [1]#Bloody edge cases...
-            print('cutpos is [1] because numcuts is 1 and V')
+            # print('cutpos is [1] because numcuts is 1 and V')
         else:
             cut_pos = random.sample(range(1,len(V)), num_cuts)#YOU NEED TO SORT THIS NUMERICALLY LOL!!!!
-            print('Doing sample because numcuts', num_cuts, 'with range from 1 to', len(V))
+            # print('Doing sample because numcuts', num_cuts, 'with range from 1 to', len(V))
 
         cut_pos = sorted(cut_pos)
-        print('Sorted cutpos list')
+        # print('Sorted cutpos list')
         cut_pos.insert(0,0)
-        print('Inserted leading 0 to cutpos')
+        # print('Inserted leading 0 to cutpos')
         cut_pos.append(len(V))
-        print('Appended final', len(V), 'to cutpos')
-        print('Final utpos:', cut_pos)
+        # print('Appended final', len(V), 'to cutpos')
+        # print('Final utpos:', cut_pos)
 
         new_chunks = []
 
@@ -158,8 +158,6 @@ class Variant(Container):
         return store
 
 class Type(Container):
-    branches = 0
-    leaves = 0
     def __init__(self, *args):
         super().__init__(*args)
         self.ID = "".join([random.choice(ascii_letters+digits) for x in range(15)])
@@ -170,14 +168,35 @@ class Type(Container):
     def get_foliage(self):
         return len(self), sum([len(i) for i in self.contents])
 
+    def update_foliage(self):
+        self.branches, self.leaves = self.get_foliage()
 
     def induce_split(self, known_variants):
-        x = self.contents[0].split(known_variants, ID=self.ID)
-        self.add(x)
-        self.contents = self.contents[1:]
+        self.pre = {}
+        self.pre['Total Leaves'] = sum([len(v) for v in self.contents])
+        self.pre['Total Branches'] = len(self.contents)
+        self.pre['Average Leaves per Branch'] = self.pre['Total Leaves']/self.pre['Total Branches']
+
+        if sum([len(i) for i in self.contents]) > 1 and self.contents[0].name in known_variants:
+            x = self.contents[0].split(known_variants, ID=self.ID)
+            self.add(x)
+            self.contents = self.contents[1:]
+            self.update_foliage()
+        else:
+            pass
+
+        self.post = {}
+        self.post['Total Leaves'] = sum([len(v) for v in self.contents])
+        self.post['Total Branches'] = len(self.contents)
+        self.post['Average Leaves per Branch'] = self.post['Total Leaves'] / self.post['Total Branches']
+        self.post['% Leaves per Branch'] = 100-(self.post['Average Leaves per Branch'] / self.pre['Average Leaves per Branch'] * 100)
+        self.post['Variety % increase'] = 100*(self.post['Total Branches'] - self.pre['Total Branches'])
 
     def report_variation(self):
         return 1.0/(float(len(self)))
+
+    def get_leaf_names(self):
+        return [v.contents[0].form for v in self.contents]
 
     def __repr__(self):
             return "{} {} ID {} branches {} leaves".format(self.__class__.__name__, self.ID, self.get_foliage()[0], self.get_foliage()[1])
@@ -259,29 +278,61 @@ class Text:
             var_counts = [t.report_variation() for t in self.all_types]
         return pd.DataFrame(var_counts)
 
-    def cause_variation(self, target, no_output=True):
+    def cause_variation(self, target, number, no_output=True):
         if self.added_variation == False:
 
             self.variation_info = {}
 
             all_targets = self.alpha_types[target]
             valid_targets = [i for i in self.alpha_types[target] if i.leaves > 1 and i.contents[0].name in self.known_variants]
-            original_k = len(all_targets)
+            original_k_m = len(all_targets)
             targeted = len(valid_targets)
 
-            for t in valid_targets:
-                t.induce_split(self.known_variants)
-            self.added_variation = True
+            #for t in valid_targets :
+            if number == -1:
+                for t in all_targets:
+                    t.induce_split(self.known_variants)
+                self.added_variation = True
 
-            self.variation_info['original_k'] = original_k
+            else:
+                selection = random.sample(all_targets, number)
+                for t in selection:
+                    t.induce_split(self.known_variants)
+                self.added_variation = True
+                self.variation_info['selection'] = selection
+
+            self.variation_info['original k & m'] = original_k_m
             self.variation_info['targeted'] = targeted
             self.variation_info['Target letter'] = target
 
-            new_k = 0
+            new_m = 0
             for t in all_targets:
-                new_k += t.branches
+                new_m += t.branches
 
-            self.variation_info['new_k'] = new_k
+            self.variation_info['new m (k still same as old)'] = new_m
+
+            self.expected_clustering = []
+            for t in self.variation_info['selection']:
+                self.expected_clustering.append(t.get_leaf_names())
+            for i in range(len(self.expected_clustering)):
+                for index, name in enumerate(self.expected_clustering[i]):
+                    self.expected_clustering[i][index] = i
+
+            self.expected_clustering  = [i for x in self.expected_clustering  for i in x]
+
+            s2 = []
+            for i in self.variation_info['selection']:
+                for v in i:
+                    s2.append(v.name)
+
+            self.expected_temp = {}
+            for pair in zip(s2, self.expected_clustering):
+                self.expected_temp[pair[0]] = pair[1]
+
+            self.expected_temp2 = sorted(self.expected_temp.items(), key=itemgetter(0))
+
+            self.expected = [i[1] for i in self.expected_temp2]
+
 
             if no_output == False:
                 return self.variation_info

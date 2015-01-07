@@ -10,10 +10,11 @@ from itertools import product
 import csv
 from sklearn.cluster import KMeans as KM
 from datetime import datetime as DT
+from sklearn.metrics.cluster import normalized_mutual_info_score as NMIS
 
 '''
 p1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=0, include_JWD=False, include_bigrams=True, curr_POS_weight=0, use_pos=False)
+    posweight=0, include_JWD=False, include_bigrams=True, curr_POS_weight=0, use_pos=False, bigram_norm=True)
 
 b1 = Corpus('corpora/bnc', windowsize=0, bigramweight=1,
     posweight=0, include_JWD=True, include_bigrams=True, curr_POS_weight=0, use_pos=False)
@@ -23,18 +24,25 @@ paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
 
 bncCorpus = Corpus('corpora/bnc', windowsize=1, bigramweight=1,
     posweight=1, include_JWD=False, include_bigrams=False, curr_POS_weight=1)
+
+
+
+**kwargs = filename, windowsize=1, bigramweight=1, posweight=1,
+        include_JWD=True, include_bigrams=True, curr_POS_weight=1, use_pos=True, bigram_norm=True
+
 '''
 
 class Corpus:
-    def __init__(self, filename, windowsize=1, bigramweight=1, posweight=1,
-        include_JWD=True, include_bigrams=True, curr_POS_weight=1, use_pos=True):
-        #example junk: junk={'FW', '.', ',', "'", '"'}
-        self.windowsize = windowsize
-        self.bigramweight = bigramweight
-        self.posweight = posweight
-        self.include_JWD = include_JWD
-        self.include_bigrams = include_bigrams
-        self.curr_POS_weight = curr_POS_weight
+    def __init__(self, **kwargs):
+        self.filename = kwargs['filename']
+        self.windowsize = kwargs['windowsize']
+        self.bigramweight = kwargs['bigramweight']
+        self.posweight = kwargs['posweight']
+        self.include_JWD = kwargs['include_JWD']
+        self.include_bigrams = kwargs['include_bigrams']
+        self.curr_POS_weight = kwargs['curr_POS_weight']
+        self.use_pos = kwargs['use_pos']
+        self.bigram_norm = kwargs['bigram_norm']
 
         def process_paston_data(filename):
             with open(filename) as file:
@@ -49,11 +57,11 @@ class Corpus:
                     letter[index] = sentence.split()#splits each sentence into word_POS chunks
             for l in letters3:
                 for s in l:
-                    if windowsize == 0:
+                    if self.windowsize  == 0:
                         s.append("ENDPAD_END")
                         s.insert(0,("STARTPAD_START"))
-                    if windowsize > 0:
-                        for i in range(1,windowsize+1):
+                    if self.windowsize  > 0:
+                        for i in range(1,self.windowsize +1):
                             s.append("ENDPAD+" + str(i) + '_END+' + str(i))
                             s.insert(0,"STARTPAD-" + str(i) + '_START-' + str(i))
             data = []
@@ -76,11 +84,11 @@ class Corpus:
             with open(filename, 'rb') as file:
                 raw_data = pickle.load(file)
             for s in raw_data:
-                if windowsize == 0:
+                if self.windowsize == 0:
                     s.append(("ENDPAD" , 'END'))
                     s.insert(0,("STARTPAD" , 'START'))
-                if windowsize > 0:
-                    for i in range(1,windowsize+1):
+                if self.windowsize  > 0:
+                    for i in range(1, self.windowsize +1):
                         s.append(("ENDPAD+" + str(i) , 'END+' + str(i)))
                         s.insert(0,("STARTPAD-" + str(i) , 'START-' + str(i)))
             data1 = []
@@ -90,15 +98,21 @@ class Corpus:
             print('Processing', filename)
             return [(x.lower(),y) for (x,y) in data1]
 
-        if filename == 'corpora/paston':
-            self.data = process_paston_data(filename)
-            self.filename_nopath = filename.split('/')[1]
-        if filename == 'corpora/bnc':
-            self.data = process_bnc_data(filename)
-            self.filename_nopath = filename.split('/')[1]
-        if filename not in ['corpora/paston', 'corpora/bnc']:
-            self.data = filename
+        if self.filename == 'corpora/paston':
+            self.data = process_paston_data(self.filename)
+            self.filename_nopath = self.filename.split('/')[1]
+        if self.filename == 'corpora/bnc':
+            self.data = process_bnc_data(filename=self.filename)
+            self.filename_nopath = self.filename.split('/')[1]
+        if self.filename not in ['corpora/paston', 'corpora/bnc']:
+            self.data = self.filename
             self.filename_nopath = "VarObjOutput"#FIX THIS AT SOME POINT
+            '''
+            This is a bit hacky, since it requires the windowsize for a variant-powered Corpus to have the same
+            windowsize as the one that generated it originally. I guess I could find a way to automatically pass
+            these args (**kwargs probably?) but for now it is easy for me to know what the settings were.
+            But for future automation, this may be an important thing to deal with.
+            '''
 
         def count_all_words(data):
             '''
@@ -111,7 +125,7 @@ class Corpus:
                 So (look, noun) and (look, verb) get an entry each.
             The other version combines those by orthography, into one entry.
             '''
-            if use_pos == True:
+            if self.use_pos == True:
                 word_list = dict(Counter(data))
                 for junk in [i for i in word_list if i[0].startswith('startpad') or i[0].startswith('endpad')]:
                     del word_list[junk]
@@ -131,7 +145,7 @@ class Corpus:
         def sweep(distances):
             windows = []
 
-            if use_pos == True:
+            if self.use_pos == True:
                 for position in distances:
                     store = {k:defaultdict(int) for k in self.data if k[0][0:6] not in ['startp','endpad']}
                     for index, pair in enumerate(self.data):
@@ -140,7 +154,7 @@ class Corpus:
                     windows.append({k:dict(v) for k,v in store.items()})
                 return windows
 
-            if use_pos == False:
+            if self.use_pos == False:
                 for position in distances:
                     store = {k[0]:defaultdict(int) for k in self.data if k[0][0:6] not in ['startp','endpad']}
                     for index, pair in enumerate(self.data):
@@ -173,9 +187,9 @@ class Corpus:
         print('Counting words')
         self.word_list = list(self.all_word_counts.keys())#create word list
 
-        if use_pos == True:
+        if self.use_pos == True:
             self.vocabulary = [i[0] for i in self.word_list]
-        if use_pos == False:
+        if self.use_pos == False:
             self.vocabulary = self.word_list
 
         print('Creating word list')
@@ -199,7 +213,7 @@ class Corpus:
         print('Converting counts to conditional frequencies')
 
         def do_jwd():
-            if include_JWD == True:
+            if self.include_JWD == True:
                 print('Loading JWD_data from pickle')
                 with open('data/jwd.pickle', 'rb') as file:
                     jwd_data = pickle.load(file)
@@ -213,29 +227,29 @@ class Corpus:
                 if len(temp) > 0:
                     print(len(temp), 'new words need to be added')
                     for i, new_word in enumerate(temp):
-                        if use_pos == True:
+                        if self.use_pos == True:
                             print('Doing new word +pos', new_word, ":", i+1, '/', len(temp))
                             jwd_data[new_word[0]] = sorted([[m, jwd(new_word[0],m)] for m in modern_dictionary], key=itemgetter(1),reverse=True)[0:5]
-                        if use_pos == False:
+                        if self.use_pos == False:
                             print('Doing new word -pos', new_word, ":", i+1, '/', len(temp))
                             jwd_data[new_word] = sorted([[m, jwd(new_word,m)] for m in modern_dictionary], key=itemgetter(1),reverse=True)[0:5]
                     with open('data/jwd.pickle', 'wb') as file:
                         pickle.dump(jwd_data, file)
-                        print('Updating JWD pickle')
+                    print('Updating JWD pickle')
 
                 else:
                     print('No new words needed to be added.')
 
                 return jwd_data
 
-            if include_JWD == False:
+            if self.include_JWD == False:
                 print('Skipping JWD step')
 
 
 
         self.jwd_data = do_jwd()
 
-        def padded_ngram_dict(word):
+        def padded_ngram_dict(word, norm):
             '''
             Takes a word and returns a dictionary where:
             k = character bigram with padding (i.e. cat > $cat$ > $c, ca, at, t$)
@@ -250,15 +264,16 @@ class Corpus:
                     store.append(padded[i:current_index+2])
                     current_index += 1
                 return store
-            def padd_list_to_dict(list):
+            def padd_list_to_dict(list, norm):
                 bigramdict = {}
                 for item in list:
                     bigramdict[item] = bigramdict.get(item, 0) + 1
-                #This next bit norms the dict counts
-                for k,v in bigramdict.items():
-                    bigramdict[k] = round(bigramdict[k]/len(bigramdict),8)
+                #This next bit norms the dict counts - probably important
+                if norm == True:
+                    for k,v in bigramdict.items():
+                        bigramdict[k] = round(bigramdict[k]/len(bigramdict),8)
                 return bigramdict
-            return padd_list_to_dict(bigrams_with_padding(word))
+            return padd_list_to_dict(bigrams_with_padding(word),norm=True)
 
         def populate(word, prob_list, tag_prefix, ind):
             '''
@@ -305,7 +320,7 @@ class Corpus:
             raw_features = []
             labels = []
 
-            if use_pos == True:
+            if self.use_pos == True:
 
                 for word in self.word_list:
                     store = []
@@ -314,10 +329,10 @@ class Corpus:
                     for i in range(len(self.tag_prefixes)):
                         temp = populate(word, self.prob_list[i], self.tag_prefixes[i], i)#YOU ADDED i HERE!!! So that you can weight the current POS feature!
                         store.append(temp)
-                        if include_bigrams == True:
-                            bg = {k:bigramweight*v for k,v in padded_ngram_dict(word[0]).items()}
+                        if self.include_bigrams == True:
+                            bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word[0], norm=self.bigram_norm).items()}
                             store.append(bg)
-                    if include_JWD == True:
+                    if self.include_JWD == True:
                         for jwditem in self.jwd_data[word[0]]:
                             store.append({'JWD'+jwditem[0]:jwditem[1]})
                     for d in store:
@@ -334,10 +349,10 @@ class Corpus:
                     for i in range(len(self.tag_prefixes)):
                         temp = populate(word, self.prob_list[i], self.tag_prefixes[i], i)#YOU ADDED i HERE!!! So that you can weight the current POS feature!
                         store.append(temp)
-                        if include_bigrams == True:
-                            bg = {k:bigramweight*v for k,v in padded_ngram_dict(word).items()}
+                        if self.include_bigrams == True:
+                            bg = {k:self.bigramweight*v for k,v in padded_ngram_dict(word, norm=self.bigram_norm).items()}
                             store.append(bg)
-                    if include_JWD == True:
+                    if self.include_JWD == True:
                         for jwditem in self.jwd_data[word]:
                             store.append({'JWD'+jwditem[0]:jwditem[1]})
                     for d in store:
@@ -388,6 +403,27 @@ class Corpus:
         else:
             return l, f
 
+
+    def find_by_list(self, items, vectors=True):
+        l = []
+        f = []
+        if self.use_pos == True:
+            for index, label in enumerate(self.labels):
+                if label[0] in items:
+                    l.append(label)
+                    f.append(self.raw_features[index])
+
+        if self.use_pos == False:
+            for index, label in enumerate(self.labels):
+                if label in items:
+                    l.append(label)
+                    f.append(self.raw_features[index])
+        if vectors == True:
+            return l, self.vectoriserObject.fit_transform(f)
+        else:
+            return l,f
+
+
     def dump(self, labs, vects, filename):
         fname = 'csv/' + filename + ".csv"
         with open(fname, 'w') as file:
@@ -398,60 +434,62 @@ class Corpus:
                 out.writerow(i)
         print('Wrote to', fname)
 
+    def generate_filename(self):
+        namestring = self.filename_nopath
+        namestring += ' Winsize-' + str(self.windowsize)
+        namestring += ' Winwgt-' + str(self.posweight)
+        namestring += ' UsePOS-' + str(self.use_pos)
+        namestring += ' POSwght-' + str(self.curr_POS_weight)
+        namestring += ' UseBG-' + str(self.include_bigrams)
+        namestring += ' BGwgt-' + str(self.bigramweight)
+        namestring += ' BGnorm-' + str(self.bigram_norm)
+        namestring += ' UseJWD-' + str(self.include_JWD)
+
+        return namestring
+
     def do_KM(self, letter, k, iter=200, dump=True, parr=-2):
-        l,v = self.find_by_start(letter)
-        km_obj = KM(n_clusters=k, max_iter=iter, n_jobs=parr)
-        results = km_obj.fit(v)
-        if dump == True:
-            filename = DT.now().strftime('%d%m%y-%H%M%S') + "-" + letter.upper() + '-' + 'W' + str(self.windowsize) + str(self.include_JWD)[0] + str(self.include_bigrams)[0] + '-k' + str(k)
-            self.dump(l, results.labels_, filename)
-            return l, results.labels_
-        else:
-            return l, results.labels_
+        if type(letter) == str:
+            l,v = self.find_by_start(letter)
+            km_obj = KM(n_clusters=k, max_iter=iter, n_jobs=parr)
+            results = km_obj.fit(v)
+            if dump == True:
+                filename = DT.now().strftime('%d%m%y-%H%M%S') + self.generate_filename() + '-k' + str(k)
+                self.dump(l, results.labels_, filename)
+                self.km_labels = l
+                self.km_clusters = results.labels_
+                print('Stored KM output in self.km_labels, self.km_clusters')
+            else:
+                self.km_labels = l
+                self.km_clusters = results.labels_
+                print('Stored KM output in self.km_labels, self.km_clusters')
 
-    def print_config(self):
-        print("Window size       ", self.windowsize)
-        print("Bigram weight     ", self.bigramweight)
-        print("POS weight        ", self.posweight)
-        print("CurrPOS weight    ", self.curr_POS_weight)
-        print("Include_JWD       ", self.include_JWD)
-        print("Include_Bigrams   ", self.include_bigrams)
-        print("corpus            ", self.filename_nopath)
+        if type(letter) == list:
+            l,v = self.find_by_list(letter)
+            km_obj = KM(n_clusters=k, max_iter=iter, n_jobs=parr)
+            results = km_obj.fit(v)
 
-
-
-
-
-
-
-'''
-from Corpusobject import Corpus
-
-paston1 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=True, include_bigrams=True)
-
-paston2 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=True, include_bigrams=False)
-
-paston3 = Corpus('corpora/paston', windowsize=1, bigramweight=1,
-    posweight=1, include_JWD=False, include_bigrams=True)
-
-paston4 = Corpus('corpora/paston', windowsize=0, bigramweight=1,
-    posweight=1, include_JWD=False, include_bigrams=False)
+            self.predicted_clusters = {}
+            for v,k in zip(l, results.labels_):
+                self.predicted_clusters[v] = k
+            self.pred_prep = sorted(self.predicted_clusters.items(), key=itemgetter(0))
+            self.predicted = [i[1] for i in self.pred_prep]
 
 
-'''
+            if dump == True:
+                filename = DT.now().strftime('%d%m%y-%H%M%S') + self.generate_filename() + '-k' + str(k)
+                self.dump(l, results.labels_, filename)
+                self.km_labels = l
+                self.km_clusters = results.labels_
+                print('Stored KM output in {self}.km_labels, self.km_clusters')
+            else:
+                self.km_labels = l
+                self.km_clusters = results.labels_
+                print('Stored KM output in self.km_labels, self.km_clusters')
 
-
-
-
-
-
-
-
-
-
-
+    def KM_test(self, VarObj):
+        a = list(self.predicted_clusters.values())
+        b = list(VarObj.expected.values())
+        return NMIS(a,b)
 
 
 
