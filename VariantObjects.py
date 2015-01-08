@@ -278,7 +278,18 @@ class Text:
             var_counts = [t.report_variation() for t in self.all_types]
         return pd.DataFrame(var_counts)
 
-    def cause_variation(self, target, number, no_output=True):
+    def cause_variation(self, target, number, no_output=True, splittable_only=True):
+        '''
+        Target = initial letter to target
+        Number = number of Types that should split their Variants. If set to -1, targets ALL Types
+        no_output = if True, doesn't return anything. If False, returns self.variation_info. But this is probably junk code and can be removed, since this all gets
+                    stored in the object as a variable or something
+        splittable_only = if True, will only target Types which contain Variants which have Instances with multiple possible forms available in the known_variants dictionary
+                          if False, then will select the number of Types specified from all available. May not actually split them as they may not have known_variants available
+
+        '''
+
+
         if self.added_variation == False:
 
             self.variation_info = {}
@@ -295,11 +306,19 @@ class Text:
                 self.added_variation = True
 
             else:
-                selection = random.sample(all_targets, number)
-                for t in selection:
-                    t.induce_split(self.known_variants)
-                self.added_variation = True
-                self.variation_info['selection'] = selection
+                if splittable_only == False:
+                    selection = random.sample(all_targets, number)
+                    for t in selection:
+                        t.induce_split(self.known_variants)
+                    self.added_variation = True
+                    self.variation_info['selection'] = selection
+                if splittable_only == True:
+                    selection = random.sample(valid_targets, number)
+                    for t in selection:
+                        t.induce_split(self.known_variants)
+                    self.added_variation = True
+                    self.variation_info['selection'] = selection
+
 
             self.variation_info['original k & m'] = original_k_m
             self.variation_info['targeted'] = targeted
@@ -332,7 +351,6 @@ class Text:
             self.expected_temp2 = sorted(self.expected_temp.items(), key=itemgetter(0))
 
             self.expected = [i[1] for i in self.expected_temp2]
-
 
             if no_output == False:
                 return self.variation_info
